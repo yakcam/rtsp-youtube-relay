@@ -1,8 +1,9 @@
-# RTSP → YouTube Live Relay
+# RTSP → RTMP Relay
 
-A small outbound-only Docker container that pulls an IP camera's RTSP feed,
-re-encodes it to a YouTube-compatible H.264 + silent-AAC stream, and pushes
-it via RTMP to YouTube Live. Nothing inbound is ever opened.
+A small outbound-only Docker container that pulls an IP camera's RTSP
+feed, re-encodes it to a broadcaster-friendly H.264 + silent-AAC
+stream, and pushes it to any RTMP ingest — YouTube Live, Twitch, or a
+local mediamtx for testing. Nothing inbound is ever opened.
 
 Designed to run alongside ZoneMinder on the same NAS but with no
 dependency on it — the relay pulls directly from the camera.
@@ -14,15 +15,25 @@ GitHub Actions.
 
 ## Setup
 
-1. **Create the YouTube Live stream.** In YouTube Studio → *Go Live* →
-   *Stream*, create a stream and copy the **Stream key** (not the URL).
-   Recommend setting visibility to **Unlisted** for testing.
+1. **Get an RTMP destination URL.** Pick a platform:
+
+   - **YouTube Live** — YouTube Studio → *Go Live* → *Stream*. Copy the
+     stream key and combine: `rtmp://a.rtmp.youtube.com/live2/<key>`.
+     Recommend visibility *Unlisted* for testing. Note: YouTube imposes
+     a 24-hour delay before live streaming is enabled on a new channel.
+   - **Twitch** — twitch.tv → *Creator Dashboard* → *Stream Key*. Pick
+     a regional ingest from https://ingest.twitch.tv/ingests; the URL
+     looks like `rtmp://live.twitch.tv/app/<key>`. Twitch lets you go
+     live immediately.
+   - **Local mediamtx (testing)** —
+     `docker run --rm -p 1935:1935 bluenviron/mediamtx`. Use
+     `rtmp://<lan-ip>:1935/test`. Watch with VLC at the same URL.
 
 2. **Configure secrets.**
 
    ```sh
    cp .env.example .env
-   # Edit .env, fill in RTSP_URL and YOUTUBE_STREAM_KEY
+   # Edit .env, fill in RTSP_URL and RTMP_URL
    chmod 600 .env
    ```
 
@@ -48,8 +59,9 @@ GitHub Actions.
 
 In the logs, you should see ffmpeg's startup banner showing the detected
 camera codec / resolution / framerate, then quiet running. Within ~30
-seconds, YouTube Studio's *Live Control Room* should report a **GOOD**
-connection, and the preview player will show the camera feed.
+seconds, your platform's live dashboard should report a healthy
+connection (YouTube: *GOOD*; Twitch: *Inspector* shows green) and the
+preview player will show the camera feed.
 
 ```sh
 # Tail recent logs
@@ -64,8 +76,8 @@ Periodic reconnects are fine; constant crash-looping is not.
 ## Security
 
 - **`.env` is gitignored.** It contains the camera password (in
-  `RTSP_URL`) and your YouTube stream key. `chmod 600 .env` so other
-  local users can't read it.
+  `RTSP_URL`) and your platform stream key (embedded in `RTMP_URL`).
+  `chmod 600 .env` so other local users can't read it.
 - **`docker inspect zm-stream-relay` exposes both secrets in plaintext**
   as env-var values. Treat the Docker socket on the NAS as
   root-equivalent. Don't paste `docker inspect` output or full container
@@ -81,15 +93,15 @@ Periodic reconnects are fine; constant crash-looping is not.
 ## Copyright warning
 
 A 24/7 unattended public broadcast can accumulate copyright strikes on
-your YouTube channel if the camera's audio (even though it's muted on
-this relay) or the visible scene captures protected material — music
-playing nearby, a TV in frame, etc. Run as **Unlisted** unless you've
-thought this through. Strikes affect the whole channel, not just the
-stream.
+your channel if the camera's audio (even though it's muted on this
+relay) or the visible scene captures protected material — music playing
+nearby, a TV in frame, etc. Run as **Unlisted** (YouTube) or **subs-only
+/ private** (Twitch) unless you've thought this through. Strikes affect
+the whole channel, not just the stream.
 
 ## Troubleshooting
 
-### "Stream not starting" or "Bad" status in YouTube Studio
+### "Stream not starting" or unhealthy on the platform dashboard
 
 Check the logs first:
 
@@ -104,8 +116,9 @@ docker compose logs --tail=100 relay
   ffmpeg -rtsp_transport tcp -i "$RTSP_URL" -t 10 -f null -
   ```
 
-- `403 Forbidden` from YouTube → stream key is wrong or the YouTube
-  stream was deleted. Re-copy the key from YouTube Studio.
+- `403 Forbidden` or `RTMP_Connect0 ... failed` from the platform →
+  stream key is wrong, expired, or the destination stream was deleted.
+  Re-copy the key and rebuild `RTMP_URL`.
 - ffmpeg starts then exits within seconds, looping → check the input
   banner. If it shows `0 streams`, the RTSP path is wrong.
 
@@ -148,6 +161,6 @@ isn't usually needed. If you want to offload anyway:
 It's tempting to replace the libx264 re-encode with `-c:v copy` to save
 CPU. **Don't** — for this camera. Its pixel format is `yuvj420p`
 (full/PC range), and stream-copy would skip the
-`yuvj420p`→`yuv420p` (limited/TV range) conversion. YouTube and most
-players treat `yuvj420p` as `yuv420p` without range-mapping, producing a
+`yuvj420p`→`yuv420p` (limited/TV range) conversion. Most players
+treat `yuvj420p` as `yuv420p` without range-mapping, producing a
 washed-out / crushed image. The re-encode is what fixes that.

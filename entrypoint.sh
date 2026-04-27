@@ -8,7 +8,7 @@
 set -u
 
 : "${RTSP_URL:?RTSP_URL must be set (see .env.example)}"
-: "${YOUTUBE_STREAM_KEY:?YOUTUBE_STREAM_KEY must be set (see .env.example)}"
+: "${RTMP_URL:?RTMP_URL must be set (see .env.example)}"
 
 DELAY=5
 MAX_DELAY=60
@@ -35,7 +35,7 @@ while true; do
       -g 50 -keyint_min 50 -sc_threshold 0 \
       -r 25 \
     -c:a aac -b:a 128k -ar 44100 -ac 2 \
-    -f flv "rtmp://a.rtmp.youtube.com/live2/$YOUTUBE_STREAM_KEY"
+    -f flv "$RTMP_URL"
   EXIT=$?
 
   END=$(date +%s)
