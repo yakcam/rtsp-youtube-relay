@@ -23,7 +23,7 @@ while true; do
   ffmpeg \
     -nostdin -loglevel info \
     -rtsp_transport tcp \
-    -stimeout 10000000 \
+    -timeout 10000000 \
     -use_wallclock_as_timestamps 1 \
     -i "$RTSP_URL" \
     -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 \
