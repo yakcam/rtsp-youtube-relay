@@ -1,0 +1,2 @@
+# Secrets — never commit. Contains RTSP_URL with camera credentials and YOUTUBE_STREAM_KEY.
+.env

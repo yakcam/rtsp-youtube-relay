@@ -1,0 +1,25 @@
+services:
+  relay:
+    image: yakcam/rtsp-youtube-relay:latest
+    # `build:` is kept for local development; `docker compose up` on the NAS
+    # will pull the published image, while `docker compose up --build` will
+    # build from this directory.
+    build: .
+    container_name: zm-stream-relay
+    restart: unless-stopped
+    env_file: .env
+    # No ports: traffic is RTSP-in (LAN) and RTMP-out (WAN), all initiated
+    # by the container. Nothing inbound is exposed.
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1000:1000"
+    logging:
+      driver: json-file
+      options:
+        # Cap per-container log buffer at 30 MB total so a misconfigured
+        # stream key can never fill the NAS disk.
+        max-size: "10m"
+        max-file: "3"
